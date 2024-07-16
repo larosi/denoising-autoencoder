@@ -24,10 +24,10 @@ class L1Regularization(nn.Module):
         return loss
 
 class AutoEncoder(nn.Module):
-    def __init__(self, input_size=540, channels=[64, 128, 256]):
+    def __init__(self, input_size=512, channels=[64, 128, 256], use_transpose_conv=True):
         super(AutoEncoder, self).__init__()
         self.encoder = Encoder(input_size, [1] + channels)
-        self.decoder = Decoder(input_size, channels[::-1] + [16])
+        self.decoder = Decoder(input_size, channels[::-1] + [16], use_transpose_conv)
 
     def forward(self, x):
         latent = self.encoder(x)
@@ -71,7 +71,7 @@ class Encoder(nn.Module):
         return x
     
 class Decoder(nn.Module):
-    def __init__(self, input_size, channels):
+    def __init__(self, input_size, channels, use_transpose_conv=True):
         super(Decoder, self).__init__()
         self.fmap_size = (input_size // 2**(len(channels)-1))  
         in_features_size = self.fmap_size * self.fmap_size * channels[0]
@@ -80,8 +80,15 @@ class Decoder(nn.Module):
         for i in range(0, len(channels)-1):
             in_ch = channels[i]
             out_ch = channels[i+1]
-            deconv_layers.append(TConvBn(in_channels=in_ch, out_channels=out_ch,
-                                         kernel_size=4, stride=2, padding=1))
+            if use_transpose_conv:
+                deconv_layers.append(TConvBn(in_channels=in_ch, out_channels=out_ch,
+                                             kernel_size=4, stride=2, padding=1))
+            else:
+                deconv_layers.append(nn.Sequential(nn.Upsample(scale_factor=2, mode='bilinear'),
+                                                   nn.Conv2d(in_channels=in_ch,
+                                                             out_channels=out_ch,
+                                                             kernel_size=3, stride=1, padding=1),
+                                                   nn.BatchNorm2d(out_ch)))
         self.deconv_layers = nn.ModuleList(deconv_layers)
         self.head = nn.Conv2d(in_channels=channels[-1], out_channels=1, kernel_size=1)
 
